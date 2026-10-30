@@ -1,4 +1,4 @@
-# BreaWX Alerts
+# BreakingWX Alerts
 
 Threshold-based weather alerting for **retail, insurance, energy, and aviation ground ops**.
 Meteomatics forecasts in, rules evaluated on a schedule, alerts out over iMessage, webhooks, and more.
