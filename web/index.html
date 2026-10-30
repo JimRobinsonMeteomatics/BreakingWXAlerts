@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meteomatics Alerts</title>
+<link rel="icon" href="/icons/192.png?v=3">
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#15191f; --mute:#667085; --line:#e3e6ea; --accent:#0b6bcb; --info:#2f7fd1; --warning:#c77700; --critical:#c62828; --ok:#1b7f4b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e1116; --card:#171b22; --ink:#e8ebf0; --mute:#8b94a3; --line:#262c36; --accent:#4c9aff; --info:#5aa2ee; --warning:#f0a030; --critical:#ff6b6b; --ok:#4cc38a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; padding:12px 16px; background:#0b1b2b; color:#fff; position:sticky; top:0; z-index:2; }
+  header .logo { height:34px; width:auto; display:block; }
+  header h1 { font-size:16px; margin:0; font-weight:600; color:rgba(255,255,255,.9); }
+  header .tag { font-size:12px; color:rgba(255,255,255,.6); }
+  header button.ghost { color:#fff; border-color:rgba(255,255,255,.3); }
+  nav { display:flex; gap:4px; flex-wrap:wrap; }
+  nav button { background:none; border:0; padding:7px 12px; border-radius:6px; color:rgba(255,255,255,.65); font:inherit; cursor:pointer; }
+  nav button.on { background:rgba(255,255,255,.14); color:#fff; font-weight:600; }
+  main { max-width:1040px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .grow { flex:1; min-width:0; }
+  h2 { font-size:16px; margin:4px 0 12px; }
+  .mute { color:var(--mute); font-size:13px; }
+  .pill { display:inline-block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:99px; border:1px solid currentColor; }
+  .info { color:var(--info); } .warning { color:var(--warning); } .critical { color:var(--critical); } .clear { color:var(--ok); }
+  button.btn { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:7px 13px; font:inherit; cursor:pointer; }
+  button.ghost { background:none; color:var(--accent); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font:inherit; cursor:pointer; }
+  button.del { color:var(--critical); }
+  input, select, textarea { font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; max-width:100%; }
+  textarea { width:100%; min-height:60px; }
+  label { display:block; font-size:12px; color:var(--mute); margin:8px 0 3px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-size:14px; }
+
+  .seg { position:relative; display:inline-grid; grid-template-columns:1fr 1fr; background:rgba(127,127,127,.22); border-radius:99px; padding:3px; }
+  .seg::before { content:""; position:absolute; top:3px; bottom:3px; left:3px; width:calc(50% - 3px); background:var(--accent); border-radius:99px; transition:transform .18s ease; }
+  .seg[data-v="metric"]::before { transform:translateX(100%); }
+  .seg button { position:relative; z-index:1; border:0; background:none; color:inherit; padding:6px 14px; border-radius:99px; font:inherit; font-size:13px; cursor:pointer; }
+  .seg button.on { color:#fff; font-weight:600; }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 16px; border-radius:8px; max-width:90vw; }
+  .cond { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
+  .multi { display:flex; flex-wrap:wrap; gap:6px 14px; }
+  .multi label { display:inline-flex; align-items:center; gap:5px; margin:0; font-size:14px; color:var(--ink); }
+  .sector { font-size:12px; color:var(--mute); text-transform:capitalize; }
+</style>
+</head>
+<body>
+<header>
+  <img class="logo" src="/brand/logo.png" alt="Meteomatics"><span class="tag" id="prov"></span>
+  <nav id="nav"></nav>
+  <div class="seg" id="unitseg" title="Display units"></div>
+  <span class="grow"></span>
+  <button class="ghost" id="runbtn">Run check now</button>
+</header>
+<main id="main"></main>
+<script>
+const TABS = ['Alerts', 'Rules', 'Templates', 'Locations', 'Recipients', 'Users'];
+const S = { tab: 'Alerts', meta: null, locs: [], recs: [], rules: [], alerts: [], users: [], cred: null, editUser: null, editRule: null, alertView: (() => { try { return localStorage.getItem('alertView') === 'all' ? 'all' : 'recent'; } catch { return 'recent'; } })(), units: (() => { try { return localStorage.getItem('units') === 'metric' ? 'metric' : 'imperial'; } catch { return 'imperial'; } })(), sector: 'all' };
+const $ = (s) => document.querySelector(s);
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 3500); }
+
+async function api(method, path, body) {
+  const headers = { 'content-type': 'application/json' };
+  const key = sessionStorage.getItem('apiKey');
+  if (key) headers.authorization = 'Bearer ' + key;
+  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 401) {
+    const k = prompt('API key');
+    if (k) { sessionStorage.setItem('apiKey', k); return api(method, path, body); }
+    throw new Error('unauthorized');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+async function load() {
+  [S.locs, S.recs, S.rules, S.alerts, S.users] = await Promise.all([api('GET', '/api/locations'), api('GET', '/api/recipients'), api('GET', '/api/rules'), api('GET', '/api/alerts?limit=100'), api('GET', '/api/users')]);
+  render();
+}
+
+// Rules are stored in each parameter's canonical unit; these convert for display and back for input.
+const PD = (param) => S.meta.params[param].display[S.units];
+const shown = (param, v) => { const d = PD(param); return +(v * d.scale + d.offset).toFixed(d.decimals + 1); };
+const canon = (param, x) => +(((x - PD(param).offset) / PD(param).scale).toFixed(4));
+const condText = (c) => `${S.meta.params[c.param]?.label ?? c.param} ${c.agg} ${c.op} ${shown(c.param, c.value)} ${PD(c.param).unit}`;
+const segHtml = (v) => `<button data-u="imperial" class="${v === 'imperial' ? 'on' : ''}" aria-pressed="${v === 'imperial'}">Imperial</button><button data-u="metric" class="${v === 'metric' ? 'on' : ''}" aria-pressed="${v === 'metric'}">Metric</button>`;
+function renderUnitSeg() {
+  const el = $('#unitseg'); el.dataset.v = S.units; el.innerHTML = segHtml(S.units);
+  el.querySelectorAll('[data-u]').forEach((b) => b.onclick = () => { S.units = b.dataset.u; try { localStorage.setItem('units', S.units); } catch {} render(); });
+}
+const ago = (iso) => { if (!iso) return 'never'; const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+const hm = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+const when = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const names = (ids, list) => ids.map((i) => list.find((x) => x.id === i)?.name ?? '?').join(', ') || 'none';
+const checks = (name, list, sel = []) => `<div class="multi" data-group="${name}">${list.map((x) => `<label><input type="checkbox" value="${x.id}" ${sel.includes(x.id) ? 'checked' : ''}>${esc(x.name)}</label>`).join('') || '<span class="mute">None yet. Add some first.</span>'}</div>`;
+const picked = (name) => [...document.querySelectorAll(`[data-group="${name}"] input:checked`)].map((i) => Number(i.value));
+
+const VIEWS = {
+  Alerts() {
+    const ttl = S.meta.alertTtlMin || 0;
+    const recent = S.alertView === 'recent' && ttl > 0;
+    const list = recent ? S.alerts.filter((a) => Date.now() - Date.parse(a.ts) < ttl * 60000) : S.alerts;
+    const bar = `<div class="row" style="margin-bottom:12px"><div class="seg" data-v="${recent ? 'imperial' : 'metric'}" id="viewseg">
+      <button data-view="recent" class="${recent ? 'on' : ''}">Last ${ttl || 30} min</button><button data-view="all" class="${recent ? '' : 'on'}">All</button></div>
+      <span class="mute grow">${list.length} shown${S.alerts.length !== list.length ? `, ${S.alerts.length - list.length} older hidden` : ''}</span>
+      <button class="ghost del" data-act="clearlog" ${S.alerts.length ? '' : 'disabled'}>Clear log</button></div>`;
+    if (!list.length) return bar + `<div class="card mute">${S.alerts.length ? 'Nothing in the last ' + ttl + ' minutes. Choose “All” to see older alerts.' : 'No alerts yet. Rules are checked on a schedule; use “Run check now” to evaluate immediately.'}</div>`;
+    return bar + list.map((a) => `<div class="card">
+      <div class="row"><span class="pill ${a.kind === 'clear' ? 'clear' : a.severity}">${a.kind === 'clear' ? 'cleared' : a.kind === 'escalation' ? 'escalated' : a.severity}</span>
+      <strong class="grow">${esc(a.ruleName)} · ${esc(a.locationName)}</strong><span class="mute">${when(a.ts)}</span></div>
+      <p style="margin:8px 0 4px">${esc(S.units === 'metric' && a.messageMetric ? a.messageMetric : a.message)}</p>
+      <div class="mute">${a.deliveries.map((d) => `${esc(d.recipient)} (${esc(d.channel)}): ${d.ok ? 'delivered' : 'failed, ' + esc(d.detail)}`).join(' · ') || 'No recipients'}</div>
+      ${a.receipts && a.receipts.length ? `<div class="mute ok">Received on phone: ${a.receipts.map((r) => `${esc(r.user)} ${hm(r.at)}`).join(' · ')}</div>` : ''}
+      ${a.acks && a.acks.length ? `<div class="mute ok">Acknowledged: ${a.acks.map((r) => `${esc(r.user)} ${hm(r.at)}`).join(' · ')}</div>` : (a.deliveries.some((d) => d.channel === 'push' && d.ok) && a.kind !== 'clear' ? '<div class="mute warning">Not acknowledged yet</div>' : '')}</div>`).join('');
+  },
+  Rules() {
+    const items = S.rules.map((r) => `<div class="card">
+      <div class="row"><span class="pill ${r.severity}">${r.severity}</span><strong class="grow">${esc(r.name)}</strong><span class="sector">${r.sector}</span></div>
+      <div class="mute" style="margin:6px 0">${r.conditions.map((c) => esc(condText(c))).join(' AND ')} · next ${r.lookaheadHours} h · cooldown ${r.cooldownMin} min</div>
+      <div class="mute">Locations: ${esc(names(r.locationIds, S.locs))}<br>Recipients: ${esc(names(r.recipientIds, S.recs))}${r.escalateAfterMin ? `<br>Escalates after ${r.escalateAfterMin} min without acknowledgement to: ${esc(names(r.escalateRecipientIds, S.recs))}` : ''}</div>
+      <div class="row" style="margin-top:10px"><button class="ghost" data-act="dry" data-id="${r.id}">Check now</button>
+      <button class="ghost" data-act="rearm" data-id="${r.id}" title="Forget that this rule already alerted, so it can alert again on the next check">Re-arm</button>
+      <button class="ghost" data-act="editrule" data-id="${r.id}">Edit</button>
+      <button class="ghost del" data-act="delrule" data-id="${r.id}">Delete</button></div>
+      <div id="dry-${r.id}" class="mute"></div></div>`).join('');
+    return (items || '<div class="card mute">No rules yet. Start from a template or build one below.</div>') + ruleForm();
+  },
+  Templates() {
+    const tabs = ['all', ...S.meta.sectors].map((s) => `<button class="ghost" data-act="sector" data-id="${s}" ${S.sector === s ? 'style="font-weight:700"' : ''}>${s}</button>`).join(' ');
+    const list = S.meta.templates.filter((t) => S.sector === 'all' || t.sector === S.sector);
+    return `<div class="card"><div class="row">${tabs}</div>
+      <label>Apply templates to these locations</label>${checks('tloc', S.locs)}
+      <label>Notify these recipients</label>${checks('trec', S.recs)}</div>
+      <div class="grid">${list.map((t) => `<div class="card"><div class="row"><span class="pill ${t.severity}">${t.severity}</span><span class="sector grow">${t.sector}</span></div>
+      <strong>${esc(t.name)}</strong><p class="mute">${esc(t.description)}</p>
+      <p class="mute">${t.conditions.map((c) => esc(condText(c))).join(' AND ')} within ${t.lookaheadHours} h</p>
+      <button class="btn" data-act="apply" data-id="${t.key}">Add rule</button></div>`).join('')}</div>`;
+  },
+  Locations() {
+    return `<div class="card"><table><tr><th>Name</th><th>Kind</th><th>Lat, Lon</th><th>Time zone</th><th></th></tr>
+      ${S.locs.map((l) => `<tr><td>${esc(l.name)}</td><td>${esc(l.kind)}</td><td>${l.lat}, ${l.lon}</td><td>${esc(l.tz)}</td><td><button class="ghost del" data-act="dellocation" data-id="${l.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="5" class="mute">None yet.</td></tr>'}</table></div>
+      <div class="card"><h2>Add location</h2><div class="row">
+      <input id="l-name" placeholder="Name (store #12, KORD ramp, Plant 3)"><input id="l-lat" placeholder="Latitude" size="9"><input id="l-lon" placeholder="Longitude" size="9">
+      <select id="l-kind">${['store', 'airport', 'plant', 'portfolio', 'region', 'site'].map((k) => `<option>${k}</option>`).join('')}</select>
+      <input id="l-tz" value="America/Chicago" size="18"><button class="btn" data-act="addlocation">Add</button></div></div>`;
+  },
+  Users() {
+    const cred = S.cred ? `<div class="card" style="border-color:var(--accent)"><strong>Credentials for ${esc(S.cred.username)}</strong>
+      <p class="mute">Shown once. Copy and send them now.</p>
+      <p>App: <code>${esc(S.meta.publicUrl || location.origin)}/app</code><br>Username: <code>${esc(S.cred.username)}</code><br>Password: <code>${esc(S.cred.password)}</code></p>
+      <button class="ghost" data-act="dismisscred">Done</button></div>` : '';
+    const eu = S.users.find((u) => u.id === S.editUser);
+    const edit = eu ? `<div class="card" style="border-color:var(--accent)"><h2>Locations for ${esc(eu.username)}</h2>
+      <p class="mute">They get every alert at the locations you tick, from any enabled rule, without being attached to each rule. Leave all unticked to send only the rules you attach them to.</p>
+      ${checks('uloc', S.locs, eu.locationIds)}
+      <div class="row" style="margin-top:10px"><button class="btn" data-act="saveuserlocs" data-id="${eu.id}">Save</button><button class="ghost" data-act="canceledit">Cancel</button></div></div>` : '';
+    return cred + edit + `<div class="card"><table><tr><th>User</th><th>Locations</th><th>Reachable</th><th></th></tr>
+      ${S.users.map((u) => `<tr><td>${esc(u.username)}<div class="mute">${when(u.createdAt)}</div></td><td>${u.locationIds.length ? esc(names(u.locationIds, S.locs)) : '<span class="mute">none: only rules you attach</span>'}</td><td><span class="pill ${u.reach.status === 'ready' ? 'clear' : u.reach.status === 'check' ? 'warning' : 'critical'}">${u.reach.status === 'ready' ? 'ready' : u.reach.status === 'check' ? 'check' : 'unreachable'}</span>
+        <div class="mute">${esc(u.reach.reason)}${u.reach.lastConfirmedAt ? ` · confirmed ${ago(u.reach.lastConfirmedAt)}` : ''}</div></td>
+      <td><button class="ghost" data-act="testuser" data-id="${u.recipientId}" ${u.devices ? '' : 'disabled'}>Test</button> <button class="ghost" data-act="edituser" data-id="${u.id}">Locations</button> <button class="ghost" data-act="resetuser" data-id="${u.id}">New password</button> <button class="ghost del" data-act="deluser" data-id="${u.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="mute">No users yet.</td></tr>'}</table></div>
+      <div class="card"><h2>Add user</h2><div class="row"><input id="u-name" placeholder="username (letters, digits, . _ -)" autocapitalize="none"><button class="btn" data-act="adduser">Create credentials</button></div>
+      <p class="mute">Each user gets a push recipient with their name. Attach it to rules (Rules tab) to choose which alerts they receive. They install the app from the link above, sign in, and tap “Turn on alerts”. Use <strong>Locations</strong> to send them everything at certain sites.</p></div>`;
+  },
+  Recipients() {
+    return `<div class="card"><table><tr><th>Name</th><th>Channel</th><th>Address</th><th>Units</th><th>Opted in</th><th></th></tr>
+      ${S.recs.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.channel)}</td><td>${esc(r.address)}</td><td>${r.units}</td><td>${r.optedIn ? 'yes' : 'no'}</td>
+      <td><button class="ghost" data-act="testrec" data-id="${r.id}">Send test</button> <button class="ghost del" data-act="delrecipient" data-id="${r.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="5" class="mute">None yet.</td></tr>'}</table></div>
+      <div class="card"><h2>Add recipient</h2><div class="row">
+      <input id="r-name" placeholder="Name"><select id="r-channel">${S.meta.channels.map((c) => `<option>${c}</option>`).join('')}</select>
+      <select id="r-units"><option value="imperial">Imperial</option><option value="metric">Metric</option></select>
+      <input id="r-addr" class="grow" placeholder="Phone / Apple ID, webhook URL, or console"><button class="btn" data-act="addrecipient">Add</button></div>
+      <p class="mute"><strong>imessage_mac</strong>: a Mac signed into Messages sends the text (personal / beta). <strong>imessage_business</strong>: Apple Messages for Business via your MSP; people opt in by texting START first. <strong>webhook</strong>: JSON POST to Slack relays, ops tools, trading desks, dispatch.</p></div>`;
+  },
+};
+
+function ruleForm() {
+  const p = Object.entries(S.meta.params);
+  const r = S.rules.find((x) => x.id === S.editRule) || null;
+  const sel = (cur, def) => (s) => `<option ${s === (cur ?? def) ? 'selected' : ''}>${s}</option>`;
+  return `<div class="card" id="ruleform" ${r ? 'style="border-color:var(--accent)"' : ''}><h2>${r ? `Edit rule: ${esc(r.name)}` : 'Build a rule'}</h2>
+    <div class="row"><input id="f-name" class="grow" placeholder="Rule name" value="${esc(r?.name ?? '')}">
+    <select id="f-sector">${S.meta.sectors.map(sel(r?.sector, 'retail')).join('')}</select>
+    <select id="f-sev">${['info', 'warning', 'critical'].map(sel(r?.severity, 'warning')).join('')}</select></div>
+    <label>Conditions (all must be true)</label><div id="f-conds"></div><button class="ghost" data-act="addcond">+ condition</button>
+    <div class="row"><div><label>Look ahead (hours)</label><input id="f-look" type="number" value="${r?.lookaheadHours ?? 12}" min="1" max="240" style="width:90px"></div>
+    <div><label>Cooldown (minutes)</label><input id="f-cool" type="number" value="${r?.cooldownMin ?? 360}" min="0" style="width:90px"></div></div>
+    <label>Locations</label>${checks('floc', S.locs, r?.locationIds)}<label>Recipients</label>${checks('frec', S.recs, r?.recipientIds)}
+    <label>Escalation: if nobody acknowledges within this many minutes (0 = off), also notify</label>
+    <div class="row"><input id="f-esc" type="number" value="${r?.escalateAfterMin ?? 0}" min="0" max="1440" style="width:90px"><span class="mute">min</span></div>
+    ${checks('fescr', S.recs, r?.escalateRecipientIds)}
+    <label>Message (optional). Variables: {{severity}} {{rule}} {{location}} {{summary}} {{v0}} {{t0}}</label><textarea id="f-msg">${esc(r?.message ?? '')}</textarea>
+    <div class="row" style="margin-top:8px"><label style="margin:0;color:var(--ink)"><input type="checkbox" id="f-clear" ${r && !r.notifyOnClear ? '' : 'checked'}> Send a “cleared” message when it ends</label>
+    ${r ? `<label style="margin:0;color:var(--ink)"><input type="checkbox" id="f-enabled" ${r.enabled ? 'checked' : ''}> Enabled</label>` : ''}</div>
+    <div class="row" style="margin-top:10px"><button class="btn" data-act="saverule">${r ? 'Save changes' : 'Create rule'}</button>${r ? '<button class="ghost" data-act="cancelruleedit">Cancel</button>' : ''}</div>
+    ${r ? '<div class="mute" style="margin-top:6px">Changing the conditions, locations or look-ahead re-arms the rule, so it can alert again on the next check.</div>' : ''}
+    <template id="cond-tpl"><div class="cond"><select class="c-param">${p.map(([k, v]) => `<option value="${k}">${v.label} (${v.display[S.units].unit})</option>`).join('')}</select>
+    <select class="c-agg">${['max', 'min', 'sum', 'avg', 'first'].map((a) => `<option>${a}</option>`).join('')}</select>
+    <select class="c-op">${['>=', '>', '<=', '<'].map((o) => `<option>${o}</option>`).join('')}</select>
+    <input class="c-val" type="number" step="any" placeholder="value" style="width:90px"><button class="ghost del" data-act="rmcond">×</button></div></template></div>`;
+}
+
+// Fill the condition rows: one blank row for a new rule, or the rule's own conditions (shown in the chosen units) when editing.
+function initCondRows() {
+  const r = S.rules.find((x) => x.id === S.editRule);
+  $('#f-conds').innerHTML = '';
+  for (const c of r ? r.conditions : [null]) {
+    addCond();
+    const row = [...document.querySelectorAll('.cond')].pop();
+    if (!c) continue;
+    row.querySelector('.c-param').value = c.param; row.querySelector('.c-agg').value = c.agg;
+    row.querySelector('.c-op').value = c.op; row.querySelector('.c-val').value = shown(c.param, c.value);
+  }
+}
+
+function render() {
+  $('#nav').innerHTML = TABS.map((t) => `<button class="${t === S.tab ? 'on' : ''}" data-act="tab" data-id="${t}">${t}</button>`).join('');
+  renderUnitSeg();
+  $('#main').innerHTML = VIEWS[S.tab]();
+  if (S.tab === 'Rules') initCondRows();
+}
+
+function addCond() { $('#f-conds').append($('#cond-tpl').content.cloneNode(true)); }
+
+const ACTIONS = {
+  tab: (id) => { S.tab = id; render(); },
+  sector: (id) => { S.sector = id; render(); },
+  addcond: () => addCond(),
+  rmcond: (_id, el) => { if (document.querySelectorAll('.cond').length > 1) el.closest('.cond').remove(); },
+  async dry(id) {
+    const rows = await api('POST', `/api/rules/${id}/dry-run`);
+    $(`#dry-${id}`).innerHTML = rows.map((r) => `<div>${esc(r.location.name)}: ${r.error ? esc(r.error) : (r.evaluation.matched ? '<strong class="critical">WOULD ALERT</strong> ' : 'no alert. ') + r.evaluation.results.map((x) => (x.observed === null ? 'no data' : shown(x.condition.param, x.observed) + ' ' + PD(x.condition.param).unit)).join(', ')}</div>`).join('');
+  },
+  async clearlog() {
+    if (!confirm('Permanently delete the whole alert log? People\'s phone feeds are not affected, but this history will be gone.')) return;
+    const r = await api('DELETE', '/api/alerts'); toast(`Cleared ${r.removed} alert${r.removed === 1 ? '' : 's'}`); await load();
+  },
+  async rearm(id) { await api('POST', `/api/rules/${id}/rearm`); toast('Re-armed. It will alert again on the next check if its conditions are met.'); },
+  async delrule(id) { if (confirm('Delete this rule?')) { await api('DELETE', `/api/rules/${id}`); await load(); } },
+  async dellocation(id) { if (confirm('Delete this location?')) { await api('DELETE', `/api/locations/${id}`); await load(); } },
+  async delrecipient(id) { if (confirm('Delete this recipient?')) { await api('DELETE', `/api/recipients/${id}`); await load(); } },
+  async testrec(id) { const r = await api('POST', `/api/recipients/${id}/test`); toast(r.map((d) => `${d.recipient}: ${d.ok ? 'sent' : d.detail}`).join(' · ')); },
+  async apply(key) {
+    await api('POST', `/api/templates/${key}/apply`, { locationIds: picked('tloc'), recipientIds: picked('trec') });
+    toast('Rule added'); await load();
+  },
+  async adduser() {
+    const r = await api('POST', '/api/users', { username: $('#u-name').value });
+    S.cred = { username: r.user.username, password: r.password }; await load();
+  },
+  edituser(id) { S.editUser = Number(id); render(); },
+  canceledit() { S.editUser = null; render(); },
+  async saveuserlocs(id) { await api('PUT', `/api/users/${id}/locations`, { locationIds: picked('uloc') }); S.editUser = null; toast('Locations saved'); await load(); },
+  async testuser(id) {
+    await api('POST', `/api/recipients/${id}/test`); toast('Test sent. Checking for confirmation from the phone…');
+    setTimeout(() => load().catch(() => {}), 8000);
+  },
+  async resetuser(id) {
+    if (!confirm('Generate a new password? The old one stops working and the user is signed out.')) return;
+    const r = await api('POST', `/api/users/${id}/reset-password`); S.cred = { username: r.username, password: r.password }; render();
+  },
+  async deluser(id) { if (confirm('Delete this user and their devices?')) { await api('DELETE', `/api/users/${id}`); await load(); } },
+  dismisscred() { S.cred = null; render(); },
+  async addlocation() {
+    await api('POST', '/api/locations', { name: $('#l-name').value, lat: Number($('#l-lat').value), lon: Number($('#l-lon').value), kind: $('#l-kind').value, tz: $('#l-tz').value });
+    await load();
+  },
+  async addrecipient() {
+    await api('POST', '/api/recipients', { name: $('#r-name').value, channel: $('#r-channel').value, address: $('#r-addr').value, units: $('#r-units').value });
+    await load();
+  },
+  editrule(id) { S.editRule = Number(id); render(); document.querySelector('#ruleform').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+  cancelruleedit() { S.editRule = null; render(); },
+  async saverule() {
+    const conditions = [...document.querySelectorAll('.cond')].map((c) => ({ param: c.querySelector('.c-param').value, agg: c.querySelector('.c-agg').value, op: c.querySelector('.c-op').value, value: canon(c.querySelector('.c-param').value, Number(c.querySelector('.c-val').value)) }));
+    const body = { name: $('#f-name').value, sector: $('#f-sector').value, severity: $('#f-sev').value, conditions, lookaheadHours: Number($('#f-look').value), cooldownMin: Number($('#f-cool').value), locationIds: picked('floc'), recipientIds: picked('frec'), message: $('#f-msg').value, escalateAfterMin: Number($('#f-esc').value || 0), escalateRecipientIds: picked('fescr'), notifyOnClear: $('#f-clear').checked, enabled: $('#f-enabled') ? $('#f-enabled').checked : true };
+    const editing = S.editRule;
+    if (editing) await api('PUT', `/api/rules/${editing}`, body); else await api('POST', '/api/rules', body);
+    S.editRule = null;
+    toast(editing ? 'Rule saved' : 'Rule created'); await load();
+  },
+};
+
+document.addEventListener('click', (e) => {
+  const v = e.target.closest('[data-view]');
+  if (v) { S.alertView = v.dataset.view; try { localStorage.setItem('alertView', S.alertView); } catch {} render(); }
+});
+
+document.addEventListener('click', async (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  try { await ACTIONS[el.dataset.act](el.dataset.id, el); } catch (err) { toast(err.message); }
+});
+
+$('#runbtn').onclick = async () => {
+  try { const s = await api('POST', '/api/run'); toast(`Checked ${s.checked}: ${s.triggered} triggered, ${s.cleared} cleared${s.errors.length ? ', ' + s.errors.length + ' errors' : ''}`); await load(); } catch (err) { toast(err.message); }
+};
+
+(async () => {
+  try { S.meta = await api('GET', '/api/meta'); $('#prov').textContent = 'data: ' + S.meta.provider; await load(); } catch (err) { $('#main').textContent = err.message; }
+})();
+</script>
+</body>
+</html>

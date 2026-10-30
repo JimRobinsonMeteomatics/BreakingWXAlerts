@@ -1,0 +1,8 @@
+node_modules
+.env
+data/
+.DS_Store
+brag-output/
+.agents/
+.claude/
+skills-lock.json

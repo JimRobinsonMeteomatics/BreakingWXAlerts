@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meteomatics</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/180.png?v=3">
+<meta name="theme-color" content="#0b1b2b">
+<link rel="icon" href="/icons/192.png?v=3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Meteomatics">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#15191f; --mute:#667085; --line:#e3e6ea; --accent:#0b6bcb; --info:#2f7fd1; --warning:#c77700; --critical:#c62828; --ok:#1b7f4b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e1116; --card:#171b22; --ink:#e8ebf0; --mute:#8b94a3; --line:#262c36; --accent:#4c9aff; --info:#5aa2ee; --warning:#f0a030; --critical:#ff6b6b; --ok:#4cc38a; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  header { display:flex; align-items:center; gap:12px; padding:calc(10px + env(safe-area-inset-top)) 16px 10px; background:#0b1b2b; color:#fff; position:sticky; top:0; z-index:2; }
+  header .logo { height:34px; width:auto; display:block; }
+  header .grow { flex:1; }
+  header .mute { color:rgba(255,255,255,.72); }
+  header button.ghost { color:#fff; border-color:rgba(255,255,255,.3); }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .grow { flex:1; min-width:0; }
+  .mute { color:var(--mute); font-size:14px; }
+  input { width:100%; font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px; margin:6px 0 10px; }
+  label { font-size:13px; color:var(--mute); }
+  button { font:inherit; border:0; border-radius:10px; padding:12px 16px; cursor:pointer; background:var(--accent); color:#fff; }
+  button.ghost { background:none; color:var(--accent); border:1px solid var(--line); padding:8px 12px; }
+  button.wide { width:100%; }
+  .pill { display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:99px; border:1px solid currentColor; }
+  .info { color:var(--info); } .warning { color:var(--warning); } .critical { color:var(--critical); } .clear { color:var(--ok); }
+  .err { color:var(--critical); min-height:1.3em; font-size:14px; }
+  .ok { color:var(--ok); }
+  [hidden] { display:none !important; }
+  .bad { border-color:var(--critical); }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--mute); }
+  .dot.ok { background:var(--ok); } .dot.warn { background:var(--warning); } .dot.err { background:var(--critical); }
+  .seg { position:relative; display:inline-grid; grid-template-columns:1fr 1fr; background:rgba(127,127,127,.22); border-radius:99px; padding:3px; }
+  .seg::before { content:""; position:absolute; top:3px; bottom:3px; left:3px; width:calc(50% - 3px); background:var(--accent); border-radius:99px; transition:transform .18s ease; }
+  .seg[data-v="metric"]::before { transform:translateX(100%); }
+  .seg button { position:relative; z-index:1; border:0; background:none; color:inherit; padding:6px 14px; border-radius:99px; font:inherit; font-size:13px; cursor:pointer; }
+  .seg button.on { color:#fff; font-weight:600; }
+
+  .login { max-width:360px; margin:8vh auto 0; padding:0; overflow:hidden; }
+  .login .brandbar { background:#0b1b2b; padding:22px 20px; }
+  .login .brandbar img { height:56px; width:auto; display:block; }
+  .login .body { padding:16px 20px 20px; }
+  .login h1 { font-size:20px; margin:0 0 4px; }
+</style>
+</head>
+<body>
+<div id="login" class="login card" hidden>
+  <div class="brandbar"><img src="/brand/logo.png" alt="Meteomatics"></div>
+  <div class="body">
+  <h1>Weather alerts</h1>
+  <p class="mute">Sign in with the username and password you were given.</p>
+  <form id="loginForm">
+    <label for="u">Username</label><input id="u" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required>
+    <div id="loginErr" class="err" role="alert"></div>
+    <button class="wide" type="submit">Sign in</button>
+  </form>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header><img class="logo" src="/brand/logo.png" alt="Meteomatics"><span class="grow"></span><span id="who" class="mute"></span><button class="ghost" id="logout">Sign out</button></header>
+  <main>
+    <div class="card" id="setup"></div>
+    <div class="card" id="watch"></div>
+    <div class="card" id="units"></div>
+    <div class="card" id="sound"></div>
+    <div id="monitor"></div>
+    <div id="feed"></div>
+  </main>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const J = { 'content-type': 'application/json' };
+let me = null, timer = null, tick = null, lastAlerts = [];
+
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: J, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== '/auth/login') { showLogin(); throw new Error('signed out'); }
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function showLogin() { clearInterval(timer); clearInterval(tick); $('#app').hidden = true; $('#login').hidden = false; }
+
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#loginErr').textContent = '';
+  try { await api('POST', '/auth/login', { username: $('#u').value, password: $('#p').value }); $('#p').value = ''; await start(); }
+  catch (err) { $('#loginErr').textContent = err.message; }
+});
+$('#logout').addEventListener('click', async () => { await api('POST', '/auth/logout').catch(() => {}); showLogin(); });
+
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+function b64ToBytes(b64) {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+async function currentSub() {
+  if (!pushSupported) return null;
+  const reg = await navigator.serviceWorker.getRegistration('/');
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+
+async function enablePush() {
+  const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  await navigator.serviceWorker.ready;
+  const perm = await Notification.requestPermission();   // must run from a tap
+  if (perm !== 'granted') throw new Error('Notifications were not allowed. Turn them on for this app in your phone settings.');
+  const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(me.vapidPublicKey) });
+  await api('POST', '/me/push/subscribe', sub.toJSON());
+}
+
+async function renderSetup() {
+  const el = $('#setup');
+  if (isIOS && !standalone) {
+    el.className = 'card bad';
+    el.innerHTML = `<strong class="critical">You won't get alerts yet</strong><p><strong>Install this app first.</strong></p><p class="mute">iPhone and iPad only deliver alerts to apps on the Home Screen. Tap the <strong>Share</strong> button in Safari, choose <strong>Add to Home Screen</strong>, then open <strong>Meteomatics</strong> from your Home Screen and sign in again.</p>`;
+    return;
+  }
+  if (!pushSupported) { el.innerHTML = `<strong>Alerts aren't supported in this browser</strong><p class="mute">Open this page in Chrome, Safari or Edge. You can still read alerts below.</p>`; return; }
+  if (!me.pushConfigured) { el.innerHTML = `<strong>Alerts aren't set up on the server yet</strong><p class="mute">Ask your administrator.</p>`; return; }
+  const sub = await currentSub();
+  if (sub && Notification.permission === 'granted') {
+    el.className = 'card';
+    el.innerHTML = `<div class="row"><div class="grow"><strong class="ok">Alerts are on</strong><div class="mute">This device will be notified.</div></div><button class="ghost" id="test">Send test</button></div><div id="setupMsg" class="mute"></div>`;
+    $('#test').onclick = async () => { try { const r = await api('POST', '/me/push/test'); $('#setupMsg').textContent = r[0]?.ok ? 'Test sent. It should arrive in a moment.' : (r[0]?.detail || 'Failed'); } catch (e) { $('#setupMsg').textContent = e.message; } };
+  } else {
+    el.className = 'card bad';
+    const blocked = Notification.permission === 'denied';
+    if (blocked) { el.innerHTML = `<strong class="critical">You won't get alerts: notifications are blocked</strong><p class="mute">Open your phone's <strong>Settings → Notifications → Meteomatics</strong> and allow notifications, then come back here.</p>`; return; }
+    el.innerHTML = `<strong class="critical">You won't get alerts yet</strong><p class="mute">Turn on notifications so weather alerts reach this device even when the app is closed.</p><button class="wide" id="enable">Turn on alerts</button><div id="setupMsg" class="err"></div>`;
+    $('#enable').onclick = async () => { try { await enablePush(); await renderSetup(); } catch (e) { $('#setupMsg').textContent = e.message; } };
+  }
+}
+
+const segHtml = (v) => `<button data-u="imperial" class="${v === 'imperial' ? 'on' : ''}" aria-pressed="${v === 'imperial'}">Imperial</button><button data-u="metric" class="${v === 'metric' ? 'on' : ''}" aria-pressed="${v === 'metric'}">Metric</button>`;
+
+function renderUnits() {
+  const el = $('#units');
+  el.innerHTML = `<div class="row"><div class="grow"><strong>Units</strong><div class="mute">How temperatures, wind and rain appear in your alerts.</div></div><div class="seg" data-v="${me.units}">${segHtml(me.units)}</div></div>`;
+  el.querySelectorAll('[data-u]').forEach((b) => b.onclick = async () => {
+    if (b.dataset.u === me.units) return;
+    const prev = me.units;
+    me.units = b.dataset.u; renderUnits();                       // slide immediately
+    try { await api('PUT', '/me/units', { units: me.units }); await loadFeed(); }
+    catch (e) { me.units = prev; renderUnits(); }
+  });
+}
+
+// ---- alert sounds: one distinct ding per severity, played while the app is open ----
+let audio = null;
+let soundOn = true;
+try { soundOn = localStorage.getItem('sound') !== 'off'; } catch {}
+let lastDing = 0;
+
+function unlockAudio() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+  } catch {}
+}
+document.addEventListener('pointerdown', unlockAudio);
+
+// [frequency Hz, start s, length s]
+const DINGS = {
+  clear:    [[523, 0, 0.16], [784, 0.17, 0.3]],                                  // rising pair: all clear
+  info:     [[660, 0, 0.25]],                                                    // one soft tone
+  warning:  [[660, 0, 0.18], [880, 0.22, 0.18], [660, 0.44, 0.18], [880, 0.66, 0.3]], // two-tone, repeated
+  critical: [[988, 0, 0.14], [740, 0.18, 0.14], [988, 0.36, 0.14], [740, 0.54, 0.14], [988, 0.72, 0.14], [740, 0.9, 0.14], [988, 1.08, 0.4]], // fast alarm
+};
+
+function ding(kind) {
+  if (!soundOn) return;
+  unlockAudio();
+  if (!audio || audio.state !== 'running') return;
+  lastDing = Date.now();
+  const gain = kind === 'critical' ? 0.5 : kind === 'warning' ? 0.38 : 0.3;
+  const wave = kind === 'critical' ? 'square' : 'sine';
+  for (const [freq, at, len] of DINGS[kind] || DINGS.info) {
+    const o = audio.createOscillator(), g = audio.createGain(), t0 = audio.currentTime + at;
+    o.type = wave; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+    o.connect(g).connect(audio.destination);
+    o.start(t0); o.stop(t0 + len + 0.05);
+  }
+}
+
+function renderSound() {
+  $('#sound').innerHTML = `<div class="row"><div class="grow"><strong>Alert sounds</strong><div class="mute">Plays while this app is open. When it's closed, your phone uses its normal notification sound.</div></div>
+    <button class="ghost" id="soundToggle">${soundOn ? 'On' : 'Off'}</button></div>
+    <div class="row" style="margin-top:10px"><button class="ghost" data-snd="info">Info</button><button class="ghost" data-snd="warning">Warning</button><button class="ghost" data-snd="critical">Critical</button><button class="ghost" data-snd="clear">Cleared</button></div>`;
+  $('#soundToggle').onclick = () => { soundOn = !soundOn; try { localStorage.setItem('sound', soundOn ? 'on' : 'off'); } catch {} unlockAudio(); renderSound(); if (soundOn) ding('info'); };
+  document.querySelectorAll('[data-snd]').forEach((b) => { b.onclick = () => { const was = soundOn; soundOn = true; ding(b.dataset.snd); soundOn = was; }; });
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'alert') ding(e.data.kind === 'clear' ? 'clear' : e.data.severity);
+  loadFeed().catch(() => {});
+});
+
+let seenMax = null;
+const SEV_RANK = { info: 1, warning: 2, critical: 3 };
+
+const when = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+async function loadFeed() {
+  const alerts = await api('GET', '/me/alerts');
+  const maxId = alerts.reduce((m, a) => Math.max(m, a.id), 0);
+  if (seenMax !== null && maxId > seenMax && Date.now() - lastDing > 90000) {
+    const fresh = alerts.filter((a) => a.id > seenMax);
+    const top = fresh.filter((a) => a.kind !== 'clear').sort((a, b) => SEV_RANK[b.severity] - SEV_RANK[a.severity])[0];
+    ding(top ? top.severity : 'clear');
+  }
+  seenMax = maxId;
+  lastAlerts = alerts;
+  renderFeed();
+}
+
+// Alerts expire from the feed after the server's TTL (default 30 min); Clear hides what you've seen.
+function renderFeed() {
+  const ttl = me.alertTtlMin || 0;
+  const live = lastAlerts.filter((a) => !ttl || Date.now() - Date.parse(a.ts) < ttl * 60000);
+  const bar = live.length
+    ? `<div class="row" style="margin:4px 2px 10px"><span class="mute grow">Recent alerts${ttl ? ` · clear after ${ttl} min` : ''}</span><button class="ghost" id="clearAlerts">Clear</button></div>`
+    : '';
+  $('#feed').innerHTML = bar + (live.length ? live.map((a) => `<div class="card">
+    <div class="row"><span class="pill ${a.kind === 'clear' ? 'clear' : esc(a.severity)}">${a.kind === 'clear' ? 'cleared' : a.kind === 'escalation' ? 'escalated' : esc(a.severity)}</span><strong class="grow">${esc(a.locationName)}</strong></div>
+    <p style="margin:8px 0 4px">${esc(a.message)}</p><div class="mute">${esc(a.ruleName)} · ${when(a.ts)}</div>
+    ${a.ackable ? (a.acked ? '<div class="ok" style="margin-top:8px">✓ You acknowledged this</div>' : `<button class="wide" style="margin-top:10px" data-ack="${a.id}">Got it</button>`) : ''}</div>`).join('')
+    : `<div class="card mute">No recent alerts.${ttl ? ` Alerts show here for ${ttl} minutes.` : ''} When conditions you are watching are met, they will appear.</div>`);
+  document.querySelectorAll('[data-ack]').forEach((b) => b.onclick = async () => {
+    try { await api('POST', `/me/alerts/${b.dataset.ack}/ack`); const a = lastAlerts.find((x) => String(x.id) === b.dataset.ack); if (a) a.acked = true; renderFeed(); } catch (e) { b.textContent = 'Try again'; }
+  });
+  const btn = $('#clearAlerts');
+  if (btn) btn.onclick = async () => { try { await api('POST', '/me/alerts/clear'); lastAlerts = []; renderFeed(); } catch (e) { /* stays visible */ } };
+}
+
+// Tell the server this device's real state, so your administrator can see who is actually reachable.
+async function reportDevice() {
+  try {
+    const sub = await currentSub();
+    if (!sub) return;
+    await api('POST', '/me/device-status', { endpoint: sub.endpoint, permission: Notification.permission, standalone });
+  } catch { /* informational only */ }
+}
+
+function renderMonitor() {
+  const m = me.monitoring || { state: 'starting' };
+  const ago = m.lastCheckAt ? Math.max(0, Math.round((Date.now() - Date.parse(m.lastCheckAt)) / 60000)) : null;
+  const map = {
+    ok: ['ok', `Monitoring active · last checked ${ago === 0 ? 'just now' : ago + ' min ago'}`],
+    delayed: ['err', `Monitoring delayed: last check ${ago} min ago. You may miss alerts.`],
+    degraded: ['warn', 'Monitoring running, but the weather data source is having problems.'],
+    starting: ['', 'Monitoring starting…'],
+  };
+  const [cls, text] = map[m.state] || map.starting;
+  $('#monitor').innerHTML = `<div class="mute" style="margin:0 2px 10px"><span class="dot ${cls}"></span>${esc(text)}</div>`;
+}
+
+async function refreshMe() { try { me = { ...me, ...(await api('GET', '/me')) }; renderMonitor(); } catch {} }
+
+async function start() {
+  me = await api('GET', '/me');
+  $('#login').hidden = true; $('#app').hidden = false; $('#who').textContent = me.username;
+  $('#watch').innerHTML = me.locations.length
+    ? `<strong>Watching</strong><div class="mute">${me.locations.map(esc).join(' · ')}</div>`
+    : `<strong>Watching</strong><div class="mute">You'll get the alerts your administrator sends you.</div>`;
+  await renderSetup(); reportDevice(); renderUnits(); renderSound(); renderMonitor(); await loadFeed();
+  clearInterval(timer); timer = setInterval(() => { if (!document.hidden) { loadFeed().catch(() => {}); refreshMe(); } }, 30000);
+  clearInterval(tick); tick = setInterval(() => { if (me) renderFeed(); }, 20000);
+}
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden && me) { loadFeed().catch(() => {}); refreshMe(); reportDevice(); } });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+start().catch(() => showLogin());
+</script>
+</body>
+</html>

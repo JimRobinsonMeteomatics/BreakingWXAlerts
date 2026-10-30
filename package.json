@@ -1,0 +1,25 @@
+{
+  "name": "brea-wx-alerts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Threshold-based weather alerting for retail, insurance, energy, and aviation ops. Delivers via iMessage, webhooks, and more.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "demo": "MOCK=1 node src/server.ts",
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/web-push": "^3.6.4",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
