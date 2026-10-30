@@ -3,6 +3,10 @@
 Threshold-based weather alerting for **retail, insurance, energy, and aviation ground ops**.
 Meteomatics forecasts in, rules evaluated on a schedule, alerts out over iMessage, webhooks, and more.
 
+[![Watch the 20-second promo](promo/brag.jpg)](promo/brag.mp4)
+
+*Watch the promo: [promo/brag.mp4](promo/brag.mp4)*
+
 ```
 Meteomatics REST ─► poller ─► rules engine ─► state machine ─► channels
                                 (AND of conditions,           ├─ imessage_business  (Apple Messages for Business via MSP)
